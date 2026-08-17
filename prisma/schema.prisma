@@ -1,0 +1,113 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  displayName  String
+  avatarUrl    String?
+  createdAt    DateTime @default(now())
+
+  membership      GroupMember?
+  createdGroups   Group[]        @relation("GroupCreator")
+  createdSessions Session[]      @relation("SessionCreator")
+  entries         SessionEntry[]
+  rebuysAsBuyer   Rebuy[]        @relation("RebuyBuyer")
+  rebuySharesSold RebuyShare[]   @relation("RebuyShareSeller")
+  settlementsPay  Settlement[]   @relation("SettlementFrom")
+  settlementsGet  Settlement[]   @relation("SettlementTo")
+}
+
+model Group {
+  id          String   @id @default(cuid())
+  name        String
+  inviteCode  String   @unique
+  createdById String
+  createdBy   User     @relation("GroupCreator", fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+
+  members  GroupMember[]
+  sessions Session[]
+}
+
+// userId is unique: a person can belong to at most one group at a time.
+model GroupMember {
+  id       String   @id @default(cuid())
+  groupId  String
+  group    Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  userId   String   @unique
+  user     User     @relation(fields: [userId], references: [id])
+  role     String   @default("member") // "admin" | "member"
+  joinedAt DateTime @default(now())
+}
+
+model Session {
+  id          String    @id @default(cuid())
+  groupId     String
+  group       Group     @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  sessionDate DateTime
+  location    String?
+  status      String    @default("draft") // "draft" | "confirmed"
+  createdById String
+  createdBy   User      @relation("SessionCreator", fields: [createdById], references: [id])
+  createdAt   DateTime  @default(now())
+  confirmedAt DateTime?
+
+  entries     SessionEntry[]
+  rebuys      Rebuy[]
+  settlements Settlement[]
+}
+
+model SessionEntry {
+  id           String  @id @default(cuid())
+  sessionId    String
+  session      Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User    @relation(fields: [userId], references: [id])
+  initialStake Int
+  cashOut      Int?
+
+  @@unique([sessionId, userId])
+}
+
+// A single rebuy: one buyer, one or more sellers (rebuy_shares).
+model Rebuy {
+  id        String   @id @default(cuid())
+  sessionId String
+  session   Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  buyerId   String
+  buyer     User     @relation("RebuyBuyer", fields: [buyerId], references: [id])
+  createdAt DateTime @default(now())
+
+  shares RebuyShare[]
+}
+
+model RebuyShare {
+  id       String @id @default(cuid())
+  rebuyId  String
+  rebuy    Rebuy  @relation(fields: [rebuyId], references: [id], onDelete: Cascade)
+  sellerId String
+  seller   User   @relation("RebuyShareSeller", fields: [sellerId], references: [id])
+  amount   Int
+
+  @@unique([rebuyId, sellerId])
+}
+
+model Settlement {
+  id         String  @id @default(cuid())
+  sessionId  String
+  session    Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  fromUserId String
+  fromUser   User    @relation("SettlementFrom", fields: [fromUserId], references: [id])
+  toUserId   String
+  toUser     User    @relation("SettlementTo", fields: [toUserId], references: [id])
+  amount     Int
+  settled    Boolean @default(false)
+}

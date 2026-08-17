@@ -1,0 +1,13 @@
+{
+  "name": "ポーカー収支帳",
+  "short_name": "収支帳",
+  "description": "仲間内のポーカー収支・勝率を記録し、その日の精算まで行うアプリ",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F2F5EF",
+  "theme_color": "#1F6B4F",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}
