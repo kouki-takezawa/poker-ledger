@@ -942,3 +942,58 @@ select:focus-visible {
   margin: 14px 20px 0;
   width: fit-content;
 }
+
+/* ---------- Equity calculator ---------- */
+.card-slots {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.poker-card {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 52px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--ink);
+  cursor: pointer;
+  padding: 0;
+  transition: transform 0.08s ease, border-color 0.12s ease;
+}
+.poker-card:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+.poker-card:active:not(:disabled) {
+  transform: scale(0.96);
+}
+.poker-card.red {
+  color: var(--loss);
+}
+.poker-card.used {
+  opacity: 0.22;
+  cursor: not-allowed;
+}
+.poker-card.placeholder {
+  background: var(--surface-2);
+  border-style: dashed;
+  color: var(--muted);
+  cursor: default;
+}
+.poker-card-grid {
+  display: grid;
+  grid-template-columns: repeat(13, 1fr);
+  gap: 4px;
+}
+@media (max-width: 480px) {
+  .poker-card {
+    width: auto;
+    height: 38px;
+    font-size: 10.5px;
+  }
+}

@@ -130,3 +130,12 @@ export function IconPlus({ size = 14 }: IconProps) {
     </svg>
   );
 }
+
+export function IconCards({ size = 18 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 20 20" {...base}>
+      <rect x="2.5" y="5" width="9" height="12.5" rx="1.6" transform="rotate(-8 7 11)" />
+      <rect x="8.5" y="3" width="9" height="12.5" rx="1.6" />
+    </svg>
+  );
+}

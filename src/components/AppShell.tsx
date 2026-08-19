@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { signOut } from "next-auth/react";
-import { IconMenu, IconClose, IconHome, IconPlay, IconHistory, IconUser, IconUsers, IconLogout } from "./icons";
+import { IconMenu, IconClose, IconHome, IconPlay, IconHistory, IconUser, IconUsers, IconCards, IconLogout } from "./icons";
 
 const NAV_ITEMS = [
   { href: "/", label: "ホーム", Icon: IconHome },
@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { href: "/friends", label: "友達", Icon: IconUsers },
   { href: "/sessions", label: "対局履歴", Icon: IconHistory },
   { href: "/me", label: "個人成績", Icon: IconUser },
+  { href: "/equity", label: "勝率計算", Icon: IconCards },
 ];
 
 export function AppShell({
