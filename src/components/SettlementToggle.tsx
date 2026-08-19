@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { apiRequest } from "@/lib/api-client";
 
 export function SettlementToggle({
   id,
@@ -19,19 +20,13 @@ export function SettlementToggle({
   async function handleToggle() {
     setBusy(true);
     setError(null);
-    try {
-      const res = await fetch(`/api/settlements/${id}/toggle`, { method: "POST" });
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        setError(data?.error ?? "更新に失敗しました。");
-        return;
-      }
-      router.refresh();
-    } catch {
-      setError("通信エラーが発生しました。");
-    } finally {
-      setBusy(false);
+    const result = await apiRequest(`/api/settlements/${id}/toggle`, { method: "POST" });
+    setBusy(false);
+    if (!result.ok) {
+      setError(result.error);
+      return;
     }
+    router.refresh();
   }
 
   if (!canToggle) {

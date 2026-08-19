@@ -15,16 +15,20 @@ export function LoginForm() {
     e.preventDefault();
     setError(null);
     setBusy(true);
-
-    const result = await signIn("credentials", { email, password, redirect: false });
-    if (!result || result.error) {
-      setError("メールアドレスまたはパスワードが正しくありません。");
+    try {
+      const result = await signIn("credentials", { email, password, redirect: false });
+      if (!result || result.error) {
+        setError("メールアドレスまたはパスワードが正しくありません。");
+        return;
+      }
+      const callbackUrl = new URLSearchParams(window.location.search).get("callbackUrl");
+      router.push(callbackUrl && callbackUrl.startsWith("/") ? callbackUrl : "/");
+      router.refresh();
+    } catch {
+      setError("通信エラーが発生しました。もう一度お試しください。");
+    } finally {
       setBusy(false);
-      return;
     }
-    const callbackUrl = new URLSearchParams(window.location.search).get("callbackUrl");
-    router.push(callbackUrl && callbackUrl.startsWith("/") ? callbackUrl : "/");
-    router.refresh();
   }
 
   return (

@@ -27,7 +27,7 @@ export function AppShell({
   const [open, setOpen] = useState(false);
 
   return (
-    <div>
+    <div className="app-shell">
       <header className="app-header">
         <button className="hamburger-btn" onClick={() => setOpen(true)} aria-label="メニューを開く">
           <IconMenu />
@@ -35,53 +35,48 @@ export function AppShell({
         <div className="app-header-brand">♠ ポーカー収支帳</div>
       </header>
 
-      {open && (
-        <>
-          <div className="nav-scrim" onClick={() => setOpen(false)} />
-          <nav className="nav-drawer" aria-label="ナビゲーション">
-            <div className="nav-drawer-head">
-              <div className="nav-drawer-brand">♠ ポーカー収支帳</div>
-              <button className="hamburger-btn" onClick={() => setOpen(false)} aria-label="メニューを閉じる">
-                <IconClose />
-              </button>
-            </div>
-            <Link href="/friends" className="nav-drawer-group" onClick={() => setOpen(false)} style={{ textDecoration: "none", color: "inherit" }}>
-              あなたのID
-              <strong style={{ fontFamily: "var(--font-mono)" }}>{friendCode}</strong>
-            </Link>
-            <ul className="nav-links">
-              {NAV_ITEMS.map(({ href, label, Icon }) => {
-                const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
-                return (
-                  <li key={href}>
-                    <Link
-                      href={href}
-                      className={`nav-link${active ? " active" : ""}`}
-                      onClick={() => setOpen(false)}
-                    >
-                      <Icon />
-                      <span>{label}</span>
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-            <div className="nav-footer">
-              <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 10 }}>
-                {displayName} でログイン中
-              </div>
-              <button className="ghost" onClick={() => signOut({ callbackUrl: "/login" })}>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-                  <IconLogout />
-                  ログアウト
-                </span>
-              </button>
-            </div>
-          </nav>
-        </>
-      )}
+      {open && <div className="nav-scrim" onClick={() => setOpen(false)} />}
+      <nav className={`nav-drawer${open ? " open" : ""}`} aria-label="ナビゲーション">
+        <div className="nav-drawer-head">
+          <div className="nav-drawer-brand">♠ ポーカー収支帳</div>
+          <button className="hamburger-btn nav-close-btn" onClick={() => setOpen(false)} aria-label="メニューを閉じる">
+            <IconClose />
+          </button>
+        </div>
+        <Link
+          href="/friends"
+          className="nav-drawer-group"
+          onClick={() => setOpen(false)}
+          style={{ textDecoration: "none", color: "inherit" }}
+        >
+          あなたのID
+          <strong style={{ fontFamily: "var(--font-mono)" }}>{friendCode}</strong>
+        </Link>
+        <ul className="nav-links">
+          {NAV_ITEMS.map(({ href, label, Icon }) => {
+            const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
+            return (
+              <li key={href}>
+                <Link href={href} className={`nav-link${active ? " active" : ""}`} onClick={() => setOpen(false)}>
+                  <Icon />
+                  <span>{label}</span>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+        <div className="nav-footer">
+          <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 10 }}>{displayName} でログイン中</div>
+          <button className="ghost" onClick={() => signOut({ callbackUrl: "/login" })}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+              <IconLogout />
+              ログアウト
+            </span>
+          </button>
+        </div>
+      </nav>
 
-      <main>{children}</main>
+      <main className="app-main">{children}</main>
     </div>
   );
 }

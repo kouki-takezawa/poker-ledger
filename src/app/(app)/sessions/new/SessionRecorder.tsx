@@ -12,7 +12,9 @@ import {
   type RebuyInput,
 } from "@/lib/ledger";
 import { yen, formatDate } from "@/lib/format";
+import { apiRequest } from "@/lib/api-client";
 import { IconCheck, IconAlert, IconInfo, IconX, IconPlus } from "@/components/icons";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 type Member = { id: string; name: string };
 type EntryState = { initial: number; cashOut: number | null };
@@ -76,6 +78,7 @@ export function SessionRecorder({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [result, setResult] = useState<ConfirmResult | null>(null);
 
   const confirmed = result !== null;
@@ -145,61 +148,47 @@ export function SessionRecorder({
     if (zeroSum.status !== "ready") return;
     setSubmitting(true);
     setSubmitError(null);
-    try {
-      const res = await fetch(edit ? `/api/sessions/${edit.id}` : "/api/sessions", {
-        method: edit ? "PATCH" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sessionDate,
-          location: location || undefined,
-          startTime: startTime || undefined,
-          endTime: endTime || undefined,
-          entries: entryList.map((e) => ({
-            userId: e.userId,
-            initialStake: e.initialStake,
-            cashOut: e.cashOut,
-          })),
-          rebuys: rebuys.map((r) => ({ buyerId: r.buyerId, shares: r.shares })),
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setSubmitError(data.error ?? "保存に失敗しました。");
-        setSubmitting(false);
-        return;
-      }
-      if (edit) {
-        router.push(`/sessions/${edit.id}`);
-        router.refresh();
-        return;
-      }
-      setResult(data as ConfirmResult);
-    } catch {
-      setSubmitError("通信エラーが発生しました。もう一度お試しください。");
-    } finally {
-      setSubmitting(false);
+    const result = await apiRequest<ConfirmResult>(edit ? `/api/sessions/${edit.id}` : "/api/sessions", {
+      method: edit ? "PATCH" : "POST",
+      body: {
+        sessionDate,
+        location: location || undefined,
+        startTime: startTime || undefined,
+        endTime: endTime || undefined,
+        entries: entryList.map((e) => ({
+          userId: e.userId,
+          initialStake: e.initialStake,
+          cashOut: e.cashOut,
+        })),
+        rebuys: rebuys.map((r) => ({ buyerId: r.buyerId, shares: r.shares })),
+      },
+    });
+    setSubmitting(false);
+    if (!result.ok) {
+      setSubmitError(result.error);
+      return;
     }
+    if (edit) {
+      router.push(`/sessions/${edit.id}`);
+      router.refresh();
+      return;
+    }
+    setResult(result.data);
   }
 
   async function handleDelete() {
     if (!edit) return;
-    if (!window.confirm("この対局を削除しますか? 元に戻せません。")) return;
     setDeleting(true);
     setSubmitError(null);
-    try {
-      const res = await fetch(`/api/sessions/${edit.id}`, { method: "DELETE" });
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        setSubmitError(data?.error ?? "削除に失敗しました。");
-        setDeleting(false);
-        return;
-      }
-      router.push("/sessions");
-      router.refresh();
-    } catch {
-      setSubmitError("通信エラーが発生しました。もう一度お試しください。");
+    const result = await apiRequest(`/api/sessions/${edit.id}`, { method: "DELETE" });
+    if (!result.ok) {
+      setSubmitError(result.error);
       setDeleting(false);
+      setConfirmDelete(false);
+      return;
     }
+    router.push("/sessions");
+    router.refresh();
   }
 
   if (result) {
@@ -598,7 +587,12 @@ export function SessionRecorder({
         </div>
         <div className="action-bar">
           {edit && (
-            <button type="button" className="danger-ghost" disabled={deleting || submitting} onClick={handleDelete}>
+            <button
+              type="button"
+              className="danger-ghost"
+              disabled={deleting || submitting}
+              onClick={() => setConfirmDelete(true)}
+            >
               {deleting ? "削除中…" : "削除する"}
             </button>
           )}
@@ -613,6 +607,16 @@ export function SessionRecorder({
           </button>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmDelete}
+        title="この対局を削除しますか?"
+        description="元に戻せません。"
+        confirmLabel="削除する"
+        busy={deleting}
+        onConfirm={handleDelete}
+        onCancel={() => setConfirmDelete(false)}
+      />
     </div>
   );
 }

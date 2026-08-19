@@ -5,6 +5,7 @@ export const metadata: Metadata = {
   title: "ポーカー収支帳",
   description: "仲間内のポーカー収支・勝率を記録し、その日の精算まで行うアプリ",
   manifest: "/manifest.json",
+  robots: { index: false, follow: false },
 };
 
 export const viewport: Viewport = {

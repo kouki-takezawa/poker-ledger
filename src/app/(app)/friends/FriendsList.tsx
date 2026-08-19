@@ -4,6 +4,8 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { yen } from "@/lib/format";
+import { apiRequest } from "@/lib/api-client";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 export type FriendRow = {
   userId: string;
@@ -19,26 +21,22 @@ export function FriendsList({ friends }: { friends: FriendRow[] }) {
   const [sortKey, setSortKey] = useState<"totalProfit" | "winRatePct">("totalProfit");
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [pendingRemoval, setPendingRemoval] = useState<FriendRow | null>(null);
 
   const sorted = useMemo(() => [...friends].sort((a, b) => b[sortKey] - a[sortKey]), [friends, sortKey]);
 
-  async function handleRemove(friendId: string) {
-    if (!window.confirm("この友達を削除しますか? 対局の参加者に選べなくなります。")) return;
+  async function confirmRemove() {
+    if (!pendingRemoval) return;
     setError(null);
-    setBusyId(friendId);
-    try {
-      const res = await fetch(`/api/friends/${friendId}`, { method: "DELETE" });
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        setError(data?.error ?? "削除に失敗しました。");
-        return;
-      }
-      router.refresh();
-    } catch {
-      setError("通信エラーが発生しました。もう一度お試しください。");
-    } finally {
-      setBusyId(null);
+    setBusyId(pendingRemoval.userId);
+    const result = await apiRequest(`/api/friends/${pendingRemoval.userId}`, { method: "DELETE" });
+    setBusyId(null);
+    setPendingRemoval(null);
+    if (!result.ok) {
+      setError(result.error);
+      return;
     }
+    router.refresh();
   }
 
   return (
@@ -65,6 +63,7 @@ export function FriendsList({ friends }: { friends: FriendRow[] }) {
           </button>
         </div>
       )}
+      {sorted.length > 0 && <div className="scroll-hint">← 横にスクロールできます →</div>}
       <div className="table-scroll">
         <table>
           <thead>
@@ -92,7 +91,7 @@ export function FriendsList({ friends }: { friends: FriendRow[] }) {
                     type="button"
                     className="danger-ghost"
                     disabled={busyId === f.userId}
-                    onClick={() => handleRemove(f.userId)}
+                    onClick={() => setPendingRemoval(f)}
                   >
                     削除
                   </button>
@@ -109,6 +108,16 @@ export function FriendsList({ friends }: { friends: FriendRow[] }) {
           </tbody>
         </table>
       </div>
+
+      <ConfirmDialog
+        open={pendingRemoval !== null}
+        title={`${pendingRemoval?.name ?? ""}を友達から削除しますか?`}
+        description="対局の参加者に選べなくなります。"
+        confirmLabel="削除する"
+        busy={busyId === pendingRemoval?.userId}
+        onConfirm={confirmRemove}
+        onCancel={() => setPendingRemoval(null)}
+      />
     </div>
   );
 }

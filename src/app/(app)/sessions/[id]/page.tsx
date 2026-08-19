@@ -59,6 +59,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
       <div className="block-title" style={{ marginBottom: 10 }}>
         収支
       </div>
+      <div className="scroll-hint">← 横にスクロールできます →</div>
       <div className="table-scroll" style={{ marginBottom: 24 }}>
         <table>
           <thead>

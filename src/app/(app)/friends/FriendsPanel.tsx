@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { apiRequest } from "@/lib/api-client";
 
 export function FriendsPanel({
   friendCode,
@@ -43,25 +44,15 @@ export function FriendsPanel({
     setError(null);
     setNotice(null);
     setBusy(true);
-    try {
-      const res = await fetch("/api/friends", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ friendCode: code }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error ?? "追加に失敗しました。");
-        return;
-      }
-      setCode("");
-      setNotice(`${data.name}さんを友達に追加しました。`);
-      router.refresh();
-    } catch {
-      setError("通信エラーが発生しました。もう一度お試しください。");
-    } finally {
-      setBusy(false);
+    const result = await apiRequest<{ name: string }>("/api/friends", { body: { friendCode: code } });
+    setBusy(false);
+    if (!result.ok) {
+      setError(result.error);
+      return;
     }
+    setCode("");
+    setNotice(`${result.data.name}さんを友達に追加しました。`);
+    router.refresh();
   }
 
   return (

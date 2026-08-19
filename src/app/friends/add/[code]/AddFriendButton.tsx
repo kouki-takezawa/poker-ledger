@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { apiRequest } from "@/lib/api-client";
 
 export function AddFriendButton({ friendCode, name }: { friendCode: string; name: string }) {
   const router = useRouter();
@@ -12,23 +13,13 @@ export function AddFriendButton({ friendCode, name }: { friendCode: string; name
   async function handleAdd() {
     setError(null);
     setBusy(true);
-    try {
-      const res = await fetch("/api/friends", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ friendCode }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error ?? "追加に失敗しました。");
-        return;
-      }
-      setDone(true);
-    } catch {
-      setError("通信エラーが発生しました。もう一度お試しください。");
-    } finally {
-      setBusy(false);
+    const result = await apiRequest("/api/friends", { body: { friendCode } });
+    setBusy(false);
+    if (!result.ok) {
+      setError(result.error);
+      return;
     }
+    setDone(true);
   }
 
   if (done) {

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
+import { apiRequest } from "@/lib/api-client";
 
 export function RegisterForm() {
   const router = useRouter();
@@ -17,27 +18,27 @@ export function RegisterForm() {
     setError(null);
     setBusy(true);
 
-    const res = await fetch("/api/auth/register", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password, displayName }),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      setError(data.error ?? "登録に失敗しました。");
+    const registerResult = await apiRequest("/api/auth/register", { body: { email, password, displayName } });
+    if (!registerResult.ok) {
+      setError(registerResult.error);
       setBusy(false);
       return;
     }
 
-    const signInResult = await signIn("credentials", { email, password, redirect: false });
-    if (!signInResult || signInResult.error) {
+    try {
+      const signInResult = await signIn("credentials", { email, password, redirect: false });
+      if (!signInResult || signInResult.error) {
+        setError("登録は完了しましたが、自動ログインに失敗しました。ログイン画面からお試しください。");
+        return;
+      }
+      const callbackUrl = new URLSearchParams(window.location.search).get("callbackUrl");
+      router.push(callbackUrl && callbackUrl.startsWith("/") ? callbackUrl : "/");
+      router.refresh();
+    } catch {
       setError("登録は完了しましたが、自動ログインに失敗しました。ログイン画面からお試しください。");
+    } finally {
       setBusy(false);
-      return;
     }
-    const callbackUrl = new URLSearchParams(window.location.search).get("callbackUrl");
-    router.push(callbackUrl && callbackUrl.startsWith("/") ? callbackUrl : "/");
-    router.refresh();
   }
 
   return (
