@@ -11,7 +11,7 @@ import {
   type EntryInput,
   type RebuyInput,
 } from "@/lib/ledger";
-import { yen } from "@/lib/format";
+import { yen, formatDate } from "@/lib/format";
 import { IconCheck, IconAlert, IconInfo, IconX, IconPlus } from "@/components/icons";
 
 type Member = { id: string; name: string };
@@ -30,24 +30,52 @@ type ConfirmResult = {
   }[];
 };
 
+export type EditInitial = {
+  id: string;
+  sessionDate: string;
+  location: string;
+  startTime: string;
+  endTime: string;
+  selected: string[];
+  entries: Record<string, EntryState>;
+  rebuys: RebuyState[];
+};
+
+export type QuickFillOption = {
+  sessionDate: string;
+  selected: string[];
+  entries: Record<string, EntryState>;
+};
+
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
 }
 
-export function SessionRecorder({ members }: { members: Member[] }) {
+export function SessionRecorder({
+  members,
+  edit,
+  quickFill,
+}: {
+  members: Member[];
+  edit?: EditInitial;
+  quickFill?: QuickFillOption;
+}) {
   const router = useRouter();
   const byId = useMemo(() => new Map(members.map((m) => [m.id, m])), [members]);
 
-  const [sessionDate, setSessionDate] = useState(todayISO());
-  const [location, setLocation] = useState("");
-  const [selected, setSelected] = useState<string[]>([]);
-  const [entries, setEntries] = useState<Record<string, EntryState>>({});
-  const [rebuys, setRebuys] = useState<RebuyState[]>([]);
-  const [rebuyCounter, setRebuyCounter] = useState(1);
+  const [sessionDate, setSessionDate] = useState(edit?.sessionDate ?? todayISO());
+  const [location, setLocation] = useState(edit?.location ?? "");
+  const [startTime, setStartTime] = useState(edit?.startTime ?? "");
+  const [endTime, setEndTime] = useState(edit?.endTime ?? "");
+  const [selected, setSelected] = useState<string[]>(edit?.selected ?? []);
+  const [entries, setEntries] = useState<Record<string, EntryState>>(edit?.entries ?? {});
+  const [rebuys, setRebuys] = useState<RebuyState[]>(edit?.rebuys ?? []);
+  const [rebuyCounter, setRebuyCounter] = useState((edit?.rebuys.length ?? 0) + 1);
   const [formBuyer, setFormBuyer] = useState<string | null>(null);
   const [sellerAmounts, setSellerAmounts] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [result, setResult] = useState<ConfirmResult | null>(null);
 
   const confirmed = result !== null;
@@ -74,6 +102,12 @@ export function SessionRecorder({ members }: { members: Member[] }) {
       }
       return [...prev, id];
     });
+  }
+
+  function applyQuickFill() {
+    if (!quickFill) return;
+    setSelected(quickFill.selected);
+    setEntries(quickFill.entries);
   }
 
   const entryList: EntryInput[] = selected.map((id) => ({
@@ -112,12 +146,14 @@ export function SessionRecorder({ members }: { members: Member[] }) {
     setSubmitting(true);
     setSubmitError(null);
     try {
-      const res = await fetch("/api/sessions", {
-        method: "POST",
+      const res = await fetch(edit ? `/api/sessions/${edit.id}` : "/api/sessions", {
+        method: edit ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           sessionDate,
           location: location || undefined,
+          startTime: startTime || undefined,
+          endTime: endTime || undefined,
           entries: entryList.map((e) => ({
             userId: e.userId,
             initialStake: e.initialStake,
@@ -132,11 +168,37 @@ export function SessionRecorder({ members }: { members: Member[] }) {
         setSubmitting(false);
         return;
       }
+      if (edit) {
+        router.push(`/sessions/${edit.id}`);
+        router.refresh();
+        return;
+      }
       setResult(data as ConfirmResult);
     } catch {
       setSubmitError("通信エラーが発生しました。もう一度お試しください。");
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!edit) return;
+    if (!window.confirm("この対局を削除しますか? 元に戻せません。")) return;
+    setDeleting(true);
+    setSubmitError(null);
+    try {
+      const res = await fetch(`/api/sessions/${edit.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        setSubmitError(data?.error ?? "削除に失敗しました。");
+        setDeleting(false);
+        return;
+      }
+      router.push("/sessions");
+      router.refresh();
+    } catch {
+      setSubmitError("通信エラーが発生しました。もう一度お試しください。");
+      setDeleting(false);
     }
   }
 
@@ -253,7 +315,7 @@ export function SessionRecorder({ members }: { members: Member[] }) {
       <div className="card" style={{ borderRadius: 0, border: "none", borderBottom: "1px solid var(--line)" }}>
         <div className="app-header" style={{ position: "static" }}>
           <div>
-            <div className="app-header-brand">対局を記録</div>
+            <div className="app-header-brand">{edit ? "対局を編集" : "対局を記録"}</div>
             <div style={{ fontSize: 11.5, color: "var(--muted)" }}>その日の収支計算</div>
           </div>
           <input
@@ -274,7 +336,7 @@ export function SessionRecorder({ members }: { members: Member[] }) {
       </div>
 
       <div className="block">
-        <div className="field" style={{ maxWidth: 320 }}>
+        <div className="field" style={{ maxWidth: 320, marginBottom: 14 }}>
           <label htmlFor="location">場所(任意)</label>
           <input
             id="location"
@@ -284,6 +346,19 @@ export function SessionRecorder({ members }: { members: Member[] }) {
             onChange={(e) => setLocation(e.target.value)}
           />
         </div>
+        <div style={{ display: "flex", gap: 10 }}>
+          <div className="field" style={{ maxWidth: 160 }}>
+            <label htmlFor="startTime">開始時刻(任意)</label>
+            <input id="startTime" type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
+          </div>
+          <div className="field" style={{ maxWidth: 160 }}>
+            <label htmlFor="endTime">終了時刻(任意)</label>
+            <input id="endTime" type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
+          </div>
+        </div>
+        <p className="block-desc" style={{ marginTop: 8, marginBottom: 0 }}>
+          開始・終了時刻を入力すると、個人成績に時給換算の収支が表示されます。
+        </p>
       </div>
 
       <div className="block">
@@ -292,6 +367,16 @@ export function SessionRecorder({ members }: { members: Member[] }) {
           <span>参加者を選ぶ</span>
           <span className="hint">{selected.length} / 10人 選択中</span>
         </div>
+        {!edit && quickFill && selected.length === 0 && (
+          <button
+            type="button"
+            className="ghost"
+            style={{ marginBottom: 12 }}
+            onClick={applyQuickFill}
+          >
+            前回({formatDate(quickFill.sessionDate)})と同じ参加者で始める
+          </button>
+        )}
         <div className="member-picker">
           {members.map((m) => (
             <button
@@ -512,14 +597,19 @@ export function SessionRecorder({ members }: { members: Member[] }) {
           )}
         </div>
         <div className="action-bar">
+          {edit && (
+            <button type="button" className="danger-ghost" disabled={deleting || submitting} onClick={handleDelete}>
+              {deleting ? "削除中…" : "削除する"}
+            </button>
+          )}
           <button
             type="button"
             className="primary"
-            disabled={zeroSum.status !== "ready" || submitting}
+            disabled={zeroSum.status !== "ready" || submitting || deleting}
             onClick={handleConfirm}
             style={{ flex: 1 }}
           >
-            {submitting ? "保存中…" : "この内容で確定する"}
+            {submitting ? "保存中…" : edit ? "更新する" : "この内容で確定する"}
           </button>
         </div>
       </div>

@@ -26,14 +26,19 @@ export function FriendsList({ friends }: { friends: FriendRow[] }) {
     if (!window.confirm("この友達を削除しますか? 対局の参加者に選べなくなります。")) return;
     setError(null);
     setBusyId(friendId);
-    const res = await fetch(`/api/friends/${friendId}`, { method: "DELETE" });
-    setBusyId(null);
-    if (!res.ok) {
-      const data = await res.json().catch(() => null);
-      setError(data?.error ?? "削除に失敗しました。");
-      return;
+    try {
+      const res = await fetch(`/api/friends/${friendId}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        setError(data?.error ?? "削除に失敗しました。");
+        return;
+      }
+      router.refresh();
+    } catch {
+      setError("通信エラーが発生しました。もう一度お試しください。");
+    } finally {
+      setBusyId(null);
     }
-    router.refresh();
   }
 
   return (

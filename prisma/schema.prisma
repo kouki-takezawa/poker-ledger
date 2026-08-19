@@ -53,6 +53,8 @@ model Session {
   createdBy   User      @relation("SessionCreator", fields: [createdById], references: [id])
   createdAt   DateTime  @default(now())
   confirmedAt DateTime?
+  startedAt   DateTime? // optional, for hourly-rate stats
+  endedAt     DateTime? // optional; if <= startedAt, treated as rolling past midnight
 
   entries     SessionEntry[]
   rebuys      Rebuy[]

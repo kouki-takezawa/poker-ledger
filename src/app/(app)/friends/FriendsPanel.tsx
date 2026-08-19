@@ -3,13 +3,22 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-export function FriendsPanel({ friendCode, qrSrc }: { friendCode: string; qrSrc: string }) {
+export function FriendsPanel({
+  friendCode,
+  qrSrc,
+  shareUrl,
+}: {
+  friendCode: string;
+  qrSrc: string;
+  shareUrl: string;
+}) {
   const router = useRouter();
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
+  const canShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
 
   async function handleCopy() {
     try {
@@ -21,25 +30,38 @@ export function FriendsPanel({ friendCode, qrSrc }: { friendCode: string; qrSrc:
     }
   }
 
+  async function handleShare() {
+    try {
+      await navigator.share({ title: "ポーカー収支帳で友達に追加", text: `友達に追加してください: ${friendCode}`, url: shareUrl });
+    } catch {
+      // user cancelled the share sheet, or share unavailable; ignore
+    }
+  }
+
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setNotice(null);
     setBusy(true);
-    const res = await fetch("/api/friends", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ friendCode: code }),
-    });
-    const data = await res.json();
-    setBusy(false);
-    if (!res.ok) {
-      setError(data.error ?? "追加に失敗しました。");
-      return;
+    try {
+      const res = await fetch("/api/friends", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ friendCode: code }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "追加に失敗しました。");
+        return;
+      }
+      setCode("");
+      setNotice(`${data.name}さんを友達に追加しました。`);
+      router.refresh();
+    } catch {
+      setError("通信エラーが発生しました。もう一度お試しください。");
+    } finally {
+      setBusy(false);
     }
-    setCode("");
-    setNotice(`${data.name}さんを友達に追加しました。`);
-    router.refresh();
   }
 
   return (
@@ -54,7 +76,7 @@ export function FriendsPanel({ friendCode, qrSrc }: { friendCode: string; qrSrc:
           <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>
             相手にこのQRを読み取ってもらうか、下のIDを伝えてください。
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             <code
               style={{
                 fontFamily: "var(--font-mono)",
@@ -70,6 +92,11 @@ export function FriendsPanel({ friendCode, qrSrc }: { friendCode: string; qrSrc:
             <button type="button" className="ghost" onClick={handleCopy} style={{ padding: "6px 10px", fontSize: 12.5 }}>
               {copied ? "コピーしました" : "コピー"}
             </button>
+            {canShare && (
+              <button type="button" className="ghost" onClick={handleShare} style={{ padding: "6px 10px", fontSize: 12.5 }}>
+                共有
+              </button>
+            )}
           </div>
         </div>
       </div>

@@ -8,11 +8,14 @@ import {
   rankOf,
   parsePeriod,
   parseMonthParam,
+  monthlyBreakdown,
+  currentJstMonth,
 } from "@/lib/stats";
 import { getFriendIds } from "@/lib/friends";
 import { ProfileStats } from "@/components/ProfileStats";
 import { PeriodTabs } from "@/components/PeriodTabs";
 import { ProfitCalendar } from "@/components/ProfitCalendar";
+import { MonthlyBreakdownTable } from "@/components/MonthlyBreakdownTable";
 
 export default async function MemberProfilePage({
   params,
@@ -52,6 +55,15 @@ export default async function MemberProfilePage({
       <p className="page-subtitle">{profile.participations > 0 && total > 1 ? `友達内 ${rank}位 / ${total}人` : ""}</p>
       <PeriodTabs current={period} />
       <ProfileStats profile={profile} />
+
+      {period === "year" && (
+        <>
+          <div className="block-title" style={{ margin: "24px 0 10px" }}>
+            月別収支({currentJstMonth().year}年)
+          </div>
+          <MonthlyBreakdownTable data={monthlyBreakdown(allSessionResults, currentJstMonth().year)} />
+        </>
+      )}
 
       <div className="block-title" style={{ margin: "24px 0 10px" }}>
         カレンダー

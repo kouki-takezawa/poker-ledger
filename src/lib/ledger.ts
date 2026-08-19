@@ -51,6 +51,9 @@ export type ZeroSumCheck =
   | { status: "ready"; sum: 0 };
 
 export function checkZeroSum(entries: EntryInput[], rebuys: RebuyInput[]): ZeroSumCheck {
+  if (entries.length === 0) {
+    return { status: "incomplete", missingUserIds: [] };
+  }
   const missing = entries.filter((e) => e.cashOut === null || e.cashOut === undefined);
   if (missing.length > 0) {
     return { status: "incomplete", missingUserIds: missing.map((e) => e.userId) };

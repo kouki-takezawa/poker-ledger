@@ -124,6 +124,16 @@ th.num {
   font-family: var(--font-mono);
   white-space: nowrap;
 }
+/* The leading (name) column of data tables: on narrow screens, table-layout
+   auto can squeeze it down to almost nothing while numeric columns claim
+   space, wrapping CJK names one character per line. Cap and truncate instead. */
+.table-scroll table td:first-child,
+.table-scroll table th:first-child {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 38vw;
+}
 .amt-gain {
   color: var(--accent-strong);
   font-weight: 600;

@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { profitOf, type RebuyInput } from "@/lib/ledger";
+import { durationMinutes } from "@/lib/sessions";
 
 export type Period = "all" | "year" | "month";
 
@@ -132,6 +133,7 @@ export type SessionResult = {
   sessionDate: Date;
   location: string | null;
   profit: number;
+  durationMinutes: number | null;
 };
 
 export type UserProfile = UserStats & {
@@ -140,6 +142,7 @@ export type UserProfile = UserStats & {
   currentStreak: number; // positive = win streak, negative = loss streak, 0 = none
   trendPoints: number[]; // cumulative profit after each session, chronological
   sessionResults: SessionResult[]; // most recent first
+  hourlyRate: number | null; // profit per hour across sessions with a recorded duration; null if none have one
 };
 
 export async function getUserSessionResults(userId: string, period: Period = "all"): Promise<SessionResult[]> {
@@ -162,8 +165,36 @@ export async function getUserSessionResults(userId: string, period: Period = "al
     const myEntry = s.entries.find((e) => e.userId === userId)!;
     const profit =
       profitOf({ userId, initialStake: myEntry.initialStake, cashOut: myEntry.cashOut }, rebuys) ?? 0;
-    return { sessionId: s.id, sessionDate: s.sessionDate, location: s.location, profit };
+    return {
+      sessionId: s.id,
+      sessionDate: s.sessionDate,
+      location: s.location,
+      profit,
+      durationMinutes: durationMinutes(s.startedAt, s.endedAt),
+    };
   });
+}
+
+// Profit per hour across only the sessions that have a recorded duration.
+// Returns null if none of the sessions have one.
+export function computeHourlyRate(results: SessionResult[]): number | null {
+  const timed = results.filter((r) => r.durationMinutes !== null && r.durationMinutes > 0);
+  if (timed.length === 0) return null;
+  const totalProfit = timed.reduce((s, r) => s + r.profit, 0);
+  const totalHours = timed.reduce((s, r) => s + r.durationMinutes! / 60, 0);
+  return Math.round(totalProfit / totalHours);
+}
+
+// Buckets already-fetched session results into a 12-month profit breakdown
+// for the given year (JST calendar month of each session's date).
+export function monthlyBreakdown(results: SessionResult[], year: number): { month: number; profit: number }[] {
+  const totals = Array.from({ length: 12 }, () => 0);
+  for (const r of results) {
+    const jst = new Date(r.sessionDate.getTime() + JST_OFFSET_MS);
+    if (jst.getUTCFullYear() !== year) continue;
+    totals[jst.getUTCMonth()] += r.profit;
+  }
+  return totals.map((profit, month) => ({ month, profit }));
 }
 
 export async function getUserProfile(userId: string, period: Period = "all"): Promise<UserProfile> {
@@ -210,5 +241,6 @@ export async function getUserProfile(userId: string, period: Period = "all"): Pr
     currentStreak,
     trendPoints,
     sessionResults,
+    hourlyRate: computeHourlyRate(chronological),
   };
 }

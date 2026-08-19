@@ -12,18 +12,23 @@ export function AddFriendButton({ friendCode, name }: { friendCode: string; name
   async function handleAdd() {
     setError(null);
     setBusy(true);
-    const res = await fetch("/api/friends", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ friendCode }),
-    });
-    const data = await res.json();
-    setBusy(false);
-    if (!res.ok) {
-      setError(data.error ?? "追加に失敗しました。");
-      return;
+    try {
+      const res = await fetch("/api/friends", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ friendCode }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "追加に失敗しました。");
+        return;
+      }
+      setDone(true);
+    } catch {
+      setError("通信エラーが発生しました。もう一度お試しください。");
+    } finally {
+      setBusy(false);
     }
-    setDone(true);
   }
 
   if (done) {

@@ -5,6 +5,7 @@ import { getUsersStats } from "@/lib/stats";
 import { getFriendIds } from "@/lib/friends";
 import { yen, formatDate } from "@/lib/format";
 import { IconPlay } from "@/components/icons";
+import { SettlementToggle } from "@/components/SettlementToggle";
 
 export default async function HomePage() {
   const user = await requireUser();
@@ -12,7 +13,7 @@ export default async function HomePage() {
   const friendIds = await getFriendIds(user.id);
   const memberIds = [user.id, ...friendIds];
 
-  const [statsMap, users, recentSessions] = await Promise.all([
+  const [statsMap, users, recentSessions, pendingSettlements] = await Promise.all([
     getUsersStats(memberIds),
     prisma.user.findMany({ where: { id: { in: memberIds } } }),
     prisma.session.findMany({
@@ -23,6 +24,11 @@ export default async function HomePage() {
       orderBy: { sessionDate: "desc" },
       take: 5,
       include: { entries: true },
+    }),
+    prisma.settlement.findMany({
+      where: { settled: false, OR: [{ fromUserId: user.id }, { toUserId: user.id }] },
+      include: { fromUser: true, toUser: true, session: true },
+      orderBy: { session: { sessionDate: "desc" } },
     }),
   ]);
 
@@ -61,6 +67,48 @@ export default async function HomePage() {
         <IconPlay size={18} />
         対局を記録する
       </Link>
+
+      {pendingSettlements.length > 0 && (
+        <>
+          <div className="block-title" style={{ marginBottom: 10 }}>
+            未精算({pendingSettlements.length}件)
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 28 }}>
+            {pendingSettlements.map((s) => {
+              const iPay = s.fromUserId === user.id;
+              return (
+                <div
+                  key={s.id}
+                  className="card"
+                  style={{
+                    padding: "12px 14px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 10,
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <div style={{ fontSize: 13.5 }}>
+                    <span style={{ color: "var(--muted)", fontSize: 11.5 }}>{formatDate(s.session.sessionDate)}</span>
+                    <br />
+                    {iPay ? (
+                      <>
+                        <strong>{s.toUser.displayName}</strong>に <span className="amt-loss">{yen(s.amount)}</span> 支払う
+                      </>
+                    ) : (
+                      <>
+                        <strong>{s.fromUser.displayName}</strong>から <span className="amt-gain">{yen(s.amount)}</span> 受け取る
+                      </>
+                    )}
+                  </div>
+                  <SettlementToggle id={s.id} settled={false} canToggle />
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
 
       <div className="block-title" style={{ marginBottom: 10 }}>
         あなたの通算成績

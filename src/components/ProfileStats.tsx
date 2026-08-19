@@ -5,8 +5,18 @@ import { ProfitTrend } from "./ProfitTrend";
 import { StreakBadge } from "./StreakBadge";
 
 export function ProfileStats({ profile }: { profile: UserProfile }) {
-  const { participations, totalProfit, winRatePct, avgProfit, bestSession, worstSession, currentStreak, trendPoints, sessionResults } =
-    profile;
+  const {
+    participations,
+    totalProfit,
+    winRatePct,
+    avgProfit,
+    bestSession,
+    worstSession,
+    currentStreak,
+    trendPoints,
+    sessionResults,
+    hourlyRate,
+  } = profile;
 
   return (
     <>
@@ -30,6 +40,13 @@ export function ProfileStats({ profile }: { profile: UserProfile }) {
       </div>
 
       <StreakBadge streak={currentStreak} />
+
+      {hourlyRate !== null && (
+        <div className="stat-tile" style={{ marginBottom: 24 }}>
+          <div className="k">時給換算(開始/終了時刻を記録した対局のみ)</div>
+          <div className={`v ${hourlyRate >= 0 ? "amt-gain" : "amt-loss"}`}>{yen(hourlyRate, true)} / 時間</div>
+        </div>
+      )}
 
       <div className="block-title" style={{ marginBottom: 10 }}>
         通算収支の推移
