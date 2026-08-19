@@ -3,7 +3,8 @@ import { z } from "zod";
 import { requireUser } from "@/lib/auth-helpers";
 import { prisma } from "@/lib/prisma";
 import { checkZeroSum, computeSettlements, profitOf, type RebuyInput } from "@/lib/ledger";
-import { getGroupStats } from "@/lib/stats";
+import { getUsersStats } from "@/lib/stats";
+import { getFriendIds } from "@/lib/friends";
 
 const bodySchema = z.object({
   sessionDate: z.string().min(1),
@@ -30,26 +31,19 @@ const bodySchema = z.object({
 export async function POST(request: Request) {
   const user = await requireUser();
 
-  const membership = await prisma.groupMember.findUnique({ where: { userId: user.id } });
-  if (!membership) {
-    return NextResponse.json({ error: "グループに参加してください。" }, { status: 400 });
-  }
-
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 });
   }
   const { sessionDate, location, entries, rebuys } = parsed.data;
 
-  const groupId = membership.groupId;
   const participantIds = new Set(entries.map((e) => e.userId));
 
-  const groupMembers = await prisma.groupMember.findMany({
-    where: { groupId, userId: { in: [...participantIds] } },
-  });
-  if (groupMembers.length !== participantIds.size) {
+  const friendIds = new Set(await getFriendIds(user.id));
+  const notFriends = [...participantIds].filter((id) => id !== user.id && !friendIds.has(id));
+  if (notFriends.length > 0) {
     return NextResponse.json(
-      { error: "参加者にこのグループのメンバーではない人が含まれています。" },
+      { error: "参加者に友達登録していない人が含まれています。先に「友達」から追加してください。" },
       { status: 400 }
     );
   }
@@ -80,7 +74,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const beforeStats = await getGroupStats(groupId);
+  const beforeStats = await getUsersStats([...participantIds]);
 
   const profitByUser = new Map<string, number>();
   for (const e of entries) {
@@ -96,7 +90,6 @@ export async function POST(request: Request) {
   const session = await prisma.$transaction(async (tx) => {
     const created = await tx.session.create({
       data: {
-        groupId,
         sessionDate: new Date(sessionDate),
         location: location || null,
         status: "confirmed",

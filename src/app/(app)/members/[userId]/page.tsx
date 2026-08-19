@@ -1,35 +1,55 @@
+import { redirect, notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth-helpers";
-import { getUserProfile, getUsersStats, getUserSessionResults, rankOf, parsePeriod, parseMonthParam } from "@/lib/stats";
+import { prisma } from "@/lib/prisma";
+import {
+  getUserProfile,
+  getUsersStats,
+  getUserSessionResults,
+  rankOf,
+  parsePeriod,
+  parseMonthParam,
+} from "@/lib/stats";
 import { getFriendIds } from "@/lib/friends";
 import { ProfileStats } from "@/components/ProfileStats";
 import { PeriodTabs } from "@/components/PeriodTabs";
 import { ProfitCalendar } from "@/components/ProfitCalendar";
 
-export default async function MePage({
+export default async function MemberProfilePage({
+  params,
   searchParams,
 }: {
+  params: Promise<{ userId: string }>;
   searchParams: Promise<{ period?: string | string[]; month?: string | string[] }>;
 }) {
+  const { userId } = await params;
   const { period: periodParam, month: monthParam } = await searchParams;
   const period = parsePeriod(periodParam);
   const { year, month } = parseMonthParam(monthParam);
   const user = await requireUser();
 
+  if (userId === user.id) redirect("/me");
+
+  const friendship = await prisma.friendship.findUnique({
+    where: { userId_friendId: { userId: user.id, friendId: userId } },
+  });
+  if (!friendship) notFound();
+
+  const target = await prisma.user.findUnique({ where: { id: userId } });
+  if (!target) notFound();
+
   const friendIds = await getFriendIds(user.id);
 
   const [profile, statsMap, allSessionResults] = await Promise.all([
-    getUserProfile(user.id, period),
+    getUserProfile(userId, period),
     getUsersStats([user.id, ...friendIds], period),
-    getUserSessionResults(user.id, "all"),
+    getUserSessionResults(userId, "all"),
   ]);
-  const { rank, total } = rankOf(statsMap, user.id);
+  const { rank, total } = rankOf(statsMap, userId);
 
   return (
     <div className="page-shell">
-      <h1 className="page-title">個人成績</h1>
-      <p className="page-subtitle">
-        {profile.participations > 0 && total > 1 ? `友達内 ${rank}位 / ${total}人` : "あなたの成績"}
-      </p>
+      <h1 className="page-title">{target.displayName} の収支</h1>
+      <p className="page-subtitle">{profile.participations > 0 && total > 1 ? `友達内 ${rank}位 / ${total}人` : ""}</p>
       <PeriodTabs current={period} />
       <ProfileStats profile={profile} />
 

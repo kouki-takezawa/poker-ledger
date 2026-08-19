@@ -368,7 +368,8 @@ select:focus-visible {
 .chip:active:not(:disabled) {
   transform: scale(0.97);
 }
-.chip[aria-pressed="true"] {
+.chip[aria-pressed="true"],
+.chip[aria-current="page"] {
   background: var(--accent-soft);
   border-color: var(--accent);
   color: var(--accent-strong);
@@ -620,6 +621,60 @@ select:focus-visible {
   padding: 40px 20px;
   color: var(--muted);
   font-size: 13.5px;
+}
+
+/* ---------- Profit calendar ---------- */
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+.calendar-weekday {
+  text-align: center;
+  font-size: 10.5px;
+  color: var(--muted);
+  font-weight: 600;
+  padding-bottom: 4px;
+}
+.calendar-cell {
+  min-height: 46px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  padding: 4px 3px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.calendar-cell.empty {
+  border-color: transparent;
+  background: transparent;
+}
+.calendar-cell.today {
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+.calendar-day {
+  font-size: 10px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+}
+.calendar-profit {
+  font-size: 9.5px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  line-height: 1.15;
+}
+.calendar-cell.gain {
+  background: var(--accent-soft);
+}
+.calendar-cell.gain .calendar-profit {
+  color: var(--accent-strong);
+}
+.calendar-cell.loss {
+  background: var(--loss-soft);
+}
+.calendar-cell.loss .calendar-profit {
+  color: var(--loss);
 }
 
 /* ---------- Session recorder ---------- */

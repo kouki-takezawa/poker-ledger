@@ -1,12 +1,12 @@
 import { notFound } from "next/navigation";
-import { requireUserWithGroup } from "@/lib/auth-helpers";
+import { requireUser } from "@/lib/auth-helpers";
 import { prisma } from "@/lib/prisma";
 import { totalBuyIn, profitOf } from "@/lib/ledger";
 import { yen, formatDate } from "@/lib/format";
 
 export default async function SessionDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { membership } = await requireUserWithGroup();
+  const user = await requireUser();
 
   const session = await prisma.session.findUnique({
     where: { id },
@@ -18,7 +18,9 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
     },
   });
 
-  if (!session || session.groupId !== membership.groupId) notFound();
+  const viewerInSession =
+    session && (session.createdById === user.id || session.entries.some((e) => e.userId === user.id));
+  if (!session || !viewerInSession) notFound();
 
   const rebuys = session.rebuys.map((r) => ({
     buyerId: r.buyerId,

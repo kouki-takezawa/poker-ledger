@@ -306,6 +306,12 @@ export function SessionRecorder({ members }: { members: Member[] }) {
             </button>
           ))}
         </div>
+        {members.length <= 1 && (
+          <p className="block-desc" style={{ paddingLeft: 27, marginTop: 10, marginBottom: 0 }}>
+            参加者として選べるのは自分の友達のみです。
+            <Link href="/friends">友達を追加する</Link>
+          </p>
+        )}
       </div>
 
       <div className="block">

@@ -1,11 +1,13 @@
-import { requireUserWithGroup } from "@/lib/auth-helpers";
+import { requireUser } from "@/lib/auth-helpers";
+import { prisma } from "@/lib/prisma";
 import { AppShell } from "@/components/AppShell";
 
-export default async function AppGroupLayout({ children }: { children: React.ReactNode }) {
-  const { user, membership } = await requireUserWithGroup();
+export default async function AppLayout({ children }: { children: React.ReactNode }) {
+  const user = await requireUser();
+  const me = await prisma.user.findUniqueOrThrow({ where: { id: user.id }, select: { friendCode: true } });
 
   return (
-    <AppShell groupName={membership.group.name} displayName={user.name ?? ""}>
+    <AppShell friendCode={me.friendCode} displayName={user.name ?? ""}>
       {children}
     </AppShell>
   );

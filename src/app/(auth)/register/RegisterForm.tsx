@@ -35,7 +35,8 @@ export function RegisterForm() {
       setBusy(false);
       return;
     }
-    router.push("/group/setup");
+    const callbackUrl = new URLSearchParams(window.location.search).get("callbackUrl");
+    router.push(callbackUrl && callbackUrl.startsWith("/") ? callbackUrl : "/");
     router.refresh();
   }
 

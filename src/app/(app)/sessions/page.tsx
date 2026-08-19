@@ -1,14 +1,17 @@
 import Link from "next/link";
-import { requireUserWithGroup } from "@/lib/auth-helpers";
+import { requireUser } from "@/lib/auth-helpers";
 import { prisma } from "@/lib/prisma";
 import { profitOf } from "@/lib/ledger";
 import { yen, formatDate } from "@/lib/format";
 
 export default async function SessionsHistoryPage() {
-  const { membership } = await requireUserWithGroup();
+  const user = await requireUser();
 
   const sessions = await prisma.session.findMany({
-    where: { groupId: membership.groupId, status: "confirmed" },
+    where: {
+      status: "confirmed",
+      OR: [{ createdById: user.id }, { entries: { some: { userId: user.id } } }],
+    },
     orderBy: { sessionDate: "desc" },
     include: {
       entries: { include: { user: true } },

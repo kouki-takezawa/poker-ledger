@@ -1,19 +1,25 @@
 import Link from "next/link";
-import { requireUserWithGroup } from "@/lib/auth-helpers";
+import { requireUser } from "@/lib/auth-helpers";
 import { prisma } from "@/lib/prisma";
-import { getGroupStats } from "@/lib/stats";
-import { yen } from "@/lib/format";
+import { getUsersStats } from "@/lib/stats";
+import { getFriendIds } from "@/lib/friends";
+import { yen, formatDate } from "@/lib/format";
 import { IconPlay } from "@/components/icons";
 
 export default async function HomePage() {
-  const { user, membership } = await requireUserWithGroup();
-  const groupId = membership.groupId;
+  const user = await requireUser();
 
-  const [statsMap, members, recentSessions] = await Promise.all([
-    getGroupStats(groupId),
-    prisma.groupMember.findMany({ where: { groupId }, include: { user: true } }),
+  const friendIds = await getFriendIds(user.id);
+  const memberIds = [user.id, ...friendIds];
+
+  const [statsMap, users, recentSessions] = await Promise.all([
+    getUsersStats(memberIds),
+    prisma.user.findMany({ where: { id: { in: memberIds } } }),
     prisma.session.findMany({
-      where: { groupId, status: "confirmed" },
+      where: {
+        status: "confirmed",
+        OR: [{ createdById: user.id }, { entries: { some: { userId: user.id } } }],
+      },
       orderBy: { sessionDate: "desc" },
       take: 5,
       include: { entries: true },
@@ -28,15 +34,17 @@ export default async function HomePage() {
     winRatePct: 0,
   };
 
-  const ranking = members
-    .map((m) => ({ member: m, stats: statsMap.get(m.userId) ?? { totalProfit: 0, winRatePct: 0, participations: 0, wins: 0, avgProfit: 0 } }))
-    .sort((a, b) => b.stats.totalProfit - a.stats.totalProfit)
+  const nameOf = new Map(users.map((u) => [u.id, u.displayName]));
+  const ranking = memberIds
+    .map((id) => ({ userId: id, name: nameOf.get(id) ?? "?", stats: statsMap.get(id) }))
+    .filter((r) => r.stats)
+    .sort((a, b) => (b.stats!.totalProfit ?? 0) - (a.stats!.totalProfit ?? 0))
     .slice(0, 3);
 
   return (
     <div className="page-shell">
       <h1 className="page-title">ホーム</h1>
-      <p className="page-subtitle">{membership.group.name} の最新状況</p>
+      <p className="page-subtitle">あなたと友達の最新状況</p>
 
       <Link
         href="/sessions/new"
@@ -81,8 +89,8 @@ export default async function HomePage() {
       </div>
 
       <div className="block-title" style={{ marginBottom: 10 }}>
-        グループランキング(上位3人)
-        <Link href="/ranking" className="hint">
+        友達ランキング(上位3人)
+        <Link href="/friends" className="hint">
           全体を見る →
         </Link>
       </div>
@@ -91,17 +99,17 @@ export default async function HomePage() {
           <thead>
             <tr>
               <th>順位</th>
-              <th>メンバー</th>
+              <th>名前</th>
               <th className="num">通算収支</th>
             </tr>
           </thead>
           <tbody>
             {ranking.map((r, i) => (
-              <tr key={r.member.userId}>
+              <tr key={r.userId}>
                 <td>{i + 1}</td>
-                <td>{r.member.user.displayName}</td>
-                <td className={`num ${r.stats.totalProfit >= 0 ? "amt-gain" : "amt-loss"}`}>
-                  {yen(r.stats.totalProfit, true)}
+                <td>{r.userId === user.id ? `${r.name}(あなた)` : r.name}</td>
+                <td className={`num ${r.stats!.totalProfit >= 0 ? "amt-gain" : "amt-loss"}`}>
+                  {yen(r.stats!.totalProfit, true)}
                 </td>
               </tr>
             ))}
@@ -136,7 +144,7 @@ export default async function HomePage() {
               fontSize: 13.5,
             }}
           >
-            {new Date(s.sessionDate).toLocaleDateString("ja-JP")}
+            {formatDate(s.sessionDate)}
             {s.location ? ` ・ ${s.location}` : ""} ・ {s.entries.length}人参加
           </Link>
         ))}

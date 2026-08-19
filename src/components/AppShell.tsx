@@ -4,33 +4,22 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { signOut } from "next-auth/react";
-import {
-  IconMenu,
-  IconClose,
-  IconHome,
-  IconPlay,
-  IconHistory,
-  IconUser,
-  IconTrophy,
-  IconSettings,
-  IconLogout,
-} from "./icons";
+import { IconMenu, IconClose, IconHome, IconPlay, IconHistory, IconUser, IconUsers, IconLogout } from "./icons";
 
 const NAV_ITEMS = [
   { href: "/", label: "ホーム", Icon: IconHome },
   { href: "/sessions/new", label: "対局を記録", Icon: IconPlay },
+  { href: "/friends", label: "友達", Icon: IconUsers },
   { href: "/sessions", label: "対局履歴", Icon: IconHistory },
   { href: "/me", label: "個人成績", Icon: IconUser },
-  { href: "/ranking", label: "グループランキング", Icon: IconTrophy },
-  { href: "/settings", label: "メンバー・グループ設定", Icon: IconSettings },
 ];
 
 export function AppShell({
-  groupName,
+  friendCode,
   displayName,
   children,
 }: {
-  groupName: string;
+  friendCode: string;
   displayName: string;
   children: React.ReactNode;
 }) {
@@ -56,10 +45,10 @@ export function AppShell({
                 <IconClose />
               </button>
             </div>
-            <div className="nav-drawer-group">
-              グループ
-              <strong>{groupName}</strong>
-            </div>
+            <Link href="/friends" className="nav-drawer-group" onClick={() => setOpen(false)} style={{ textDecoration: "none", color: "inherit" }}>
+              あなたのID
+              <strong style={{ fontFamily: "var(--font-mono)" }}>{friendCode}</strong>
+            </Link>
             <ul className="nav-links">
               {NAV_ITEMS.map(({ href, label, Icon }) => {
                 const active = href === "/" ? pathname === "/" : pathname.startsWith(href);

@@ -13,45 +13,39 @@ model User {
   passwordHash String
   displayName  String
   avatarUrl    String?
+  friendCode   String   @unique
   createdAt    DateTime @default(now())
 
-  membership      GroupMember?
-  createdGroups   Group[]        @relation("GroupCreator")
   createdSessions Session[]      @relation("SessionCreator")
   entries         SessionEntry[]
   rebuysAsBuyer   Rebuy[]        @relation("RebuyBuyer")
   rebuySharesSold RebuyShare[]   @relation("RebuyShareSeller")
   settlementsPay  Settlement[]   @relation("SettlementFrom")
   settlementsGet  Settlement[]   @relation("SettlementTo")
+  friendsAdded    Friendship[]   @relation("FriendOwner")
+  addedByFriends  Friendship[]   @relation("FriendTarget")
 }
 
-model Group {
-  id          String   @id @default(cuid())
-  name        String
-  inviteCode  String   @unique
-  createdById String
-  createdBy   User     @relation("GroupCreator", fields: [createdById], references: [id])
-  createdAt   DateTime @default(now())
+// One-directional: userId added friendId as a friend. No approval step —
+// consistent with the rest of the app (friend codes, no accept/reject flows).
+// See docs/spec-friends.md.
+model Friendship {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation("FriendOwner", fields: [userId], references: [id])
+  friendId  String
+  friend    User     @relation("FriendTarget", fields: [friendId], references: [id])
+  createdAt DateTime @default(now())
 
-  members  GroupMember[]
-  sessions Session[]
+  @@unique([userId, friendId])
 }
 
-// userId is unique: a person can belong to at most one group at a time.
-model GroupMember {
-  id       String   @id @default(cuid())
-  groupId  String
-  group    Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  userId   String   @unique
-  user     User     @relation(fields: [userId], references: [id])
-  role     String   @default("member") // "admin" | "member"
-  joinedAt DateTime @default(now())
-}
-
+// No persistent "group": a session is just its creator (the organizer, 幹事)
+// plus whichever of their friends they invited for that occasion. See
+// docs/spec-friends.md for why the earlier Group/GroupMember model was
+// removed in favor of a friends-only model.
 model Session {
   id          String    @id @default(cuid())
-  groupId     String
-  group       Group     @relation(fields: [groupId], references: [id], onDelete: Cascade)
   sessionDate DateTime
   location    String?
   status      String    @default("draft") // "draft" | "confirmed"

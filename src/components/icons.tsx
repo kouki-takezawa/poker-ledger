@@ -64,24 +64,13 @@ export function IconUser({ size = 18 }: IconProps) {
   );
 }
 
-export function IconTrophy({ size = 18 }: IconProps) {
+export function IconUsers({ size = 18 }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 20 20" {...base}>
-      <path d="M6.5 3.5h7v4.2a3.5 3.5 0 0 1-7 0z" />
-      <path d="M6.5 4.5H4a2 2 0 0 0 2.8 3.5" />
-      <path d="M13.5 4.5H16a2 2 0 0 1-2.8 3.5" />
-      <path d="M10 11.7v2.6" />
-      <path d="M7 16.5h6" />
-      <path d="M8.3 14.3h3.4l.3 2.2H8z" />
-    </svg>
-  );
-}
-
-export function IconSettings({ size = 18 }: IconProps) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 20 20" {...base}>
-      <circle cx="10" cy="10" r="2.6" />
-      <path d="M10 3.3v1.8M10 14.9v1.8M16.7 10h-1.8M5.1 10H3.3M14.7 5.3l-1.3 1.3M6.6 13.4l-1.3 1.3M14.7 14.7l-1.3-1.3M6.6 6.6 5.3 5.3" />
+      <circle cx="7.3" cy="6.5" r="2.7" />
+      <path d="M2.3 16.2c0.8-3 3-4.5 5-4.5s4.2 1.5 5 4.5" />
+      <circle cx="14.3" cy="7.2" r="2.1" />
+      <path d="M13 11.9c1.7 0.1 3.4 1.5 4 4.3" />
     </svg>
   );
 }
