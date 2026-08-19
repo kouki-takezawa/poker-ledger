@@ -4,8 +4,7 @@
 
 ## 本番環境
 
-<!-- TODO: Vercelのデプロイ後、実際の本番URLに置き換えてください -->
-未デプロイ、または本番URL未確定です。デプロイ後にこのセクションへ実際のURLを追記してください。
+https://poker-ledger-alpha.vercel.app (Vercel、`main`ブランチから自動デプロイ)
 
 ## 機能
 
