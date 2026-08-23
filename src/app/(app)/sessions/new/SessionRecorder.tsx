@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -17,8 +17,113 @@ import { IconCheck, IconAlert, IconInfo, IconX, IconPlus } from "@/components/ic
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 type Member = { id: string; name: string };
-type EntryState = { initial: number; cashOut: number | null };
+type EntryState = { initial: number | null; cashOut: number | null };
 type RebuyState = { id: string; buyerId: string; shares: { sellerId: string; amount: number }[] };
+
+type SessionDraft = {
+  sessionDate: string;
+  location: string;
+  startTime: string;
+  endTime: string;
+  selected: string[];
+  entries: Record<string, EntryState>;
+  rebuys: RebuyState[];
+  rebuyCounter: number;
+};
+
+const DRAFT_STORAGE_KEY = "poker-ledger:session-draft:v1";
+
+function getDraftSnapshot(): string | null {
+  try {
+    return window.localStorage.getItem(DRAFT_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+// Snapshot of any draft that existed in localStorage the first time it's
+// checked on the client, cached here (module scope, not React state/refs)
+// so useSyncExternalStore keeps returning the same value on every later
+// render — including the ones triggered by our own auto-save effect writing
+// new drafts to the same key. Without this freeze, useSyncExternalStore
+// would re-read localStorage on every render and misread our own in-progress
+// auto-save as "a draft to resume", popping the dialog up mid-edit.
+let cachedDraftRaw: string | null | undefined = undefined;
+
+function getFrozenDraftSnapshot(): string | null {
+  if (cachedDraftRaw === undefined) {
+    cachedDraftRaw = getDraftSnapshot();
+  }
+  return cachedDraftRaw;
+}
+function getFrozenDraftServerSnapshot(): string | null {
+  return null;
+}
+function subscribeNever() {
+  return () => {};
+}
+
+// A constant snapshot (never changes once mounted) purely to detect "has
+// this component's client-side snapshot correction happened yet" in an
+// SSR-safe way. Unlike the draft snapshot above, this is immune to
+// self-feedback since it never depends on anything mutable.
+function getHydratedSnapshot() {
+  return true;
+}
+function getHydratedServerSnapshot() {
+  return false;
+}
+
+function parseDraft(raw: string | null, byId: Map<string, Member>): SessionDraft | null {
+  if (!raw) return null;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return null;
+    const draft = parsed as Partial<SessionDraft>;
+
+    const validSelected = Array.isArray(draft.selected)
+      ? draft.selected.filter((id): id is string => typeof id === "string" && byId.has(id))
+      : [];
+    if (validSelected.length === 0) return null;
+
+    const validEntries: Record<string, EntryState> = {};
+    if (draft.entries && typeof draft.entries === "object") {
+      for (const id of validSelected) {
+        const e = draft.entries[id];
+        if (e && typeof e === "object") {
+          validEntries[id] = {
+            initial: typeof e.initial === "number" ? e.initial : null,
+            cashOut: typeof e.cashOut === "number" ? e.cashOut : null,
+          };
+        }
+      }
+    }
+
+    const validRebuys = Array.isArray(draft.rebuys)
+      ? draft.rebuys.filter(
+          (r) =>
+            r &&
+            typeof r.id === "string" &&
+            validSelected.includes(r.buyerId) &&
+            Array.isArray(r.shares) &&
+            r.shares.every((s) => validSelected.includes(s.sellerId) && typeof s.amount === "number")
+        )
+      : [];
+
+    return {
+      sessionDate: typeof draft.sessionDate === "string" ? draft.sessionDate : todayISO(),
+      location: typeof draft.location === "string" ? draft.location : "",
+      startTime: typeof draft.startTime === "string" ? draft.startTime : "",
+      endTime: typeof draft.endTime === "string" ? draft.endTime : "",
+      selected: validSelected,
+      entries: validEntries,
+      rebuys: validRebuys,
+      rebuyCounter: typeof draft.rebuyCounter === "number" ? draft.rebuyCounter : 1,
+    };
+  } catch {
+    return null;
+  }
+}
 
 type ConfirmResult = {
   sessionId: string;
@@ -80,8 +185,119 @@ export function SessionRecorder({
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [result, setResult] = useState<ConfirmResult | null>(null);
+  const [draftHandled, setDraftHandled] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
 
   const confirmed = result !== null;
+
+  // Draft recovery only applies to creating a brand-new session — editing an
+  // existing one already has its data loaded from the server via `edit`.
+  const draftsEnabled = !edit;
+
+  // SSR-safe read of any in-progress session left over from a previous visit
+  // (e.g. the tab was closed by accident before confirming). See the
+  // `cachedDraftRaw` comment above for why this value is frozen after the
+  // first real read instead of tracking localStorage continuously.
+  const draftRaw = useSyncExternalStore(
+    subscribeNever,
+    getFrozenDraftSnapshot,
+    getFrozenDraftServerSnapshot
+  );
+  const pendingDraft = useMemo(
+    () => (draftsEnabled ? parseDraft(draftRaw, byId) : null),
+    [draftsEnabled, draftRaw, byId]
+  );
+  const showResumeDialog = draftsEnabled && pendingDraft !== null && !draftHandled && !confirmed;
+
+  // True only once the snapshots above have been corrected to their real
+  // client values. Until then, `pendingDraft` being null is ambiguous
+  // between "no draft exists" and "haven't checked yet" — the auto-save
+  // effect below must not act on it prematurely, or it can delete a real
+  // draft before ever having read it (losing the race against the
+  // correction render).
+  const isHydrated = useSyncExternalStore(subscribeNever, getHydratedSnapshot, getHydratedServerSnapshot);
+
+  // Reset the frozen draft snapshot when this component unmounts, so a later
+  // mount in the same client-side navigation session (no full page reload)
+  // re-checks localStorage instead of reusing a stale cached value.
+  useEffect(() => {
+    return () => {
+      cachedDraftRaw = undefined;
+    };
+  }, []);
+
+  // Auto-save the in-progress new session so it survives an accidental tab
+  // close. Hold off until hydration has settled, and while a previous draft
+  // is still awaiting the user's decision, so we don't wipe it out before
+  // they get to choose.
+  useEffect(() => {
+    if (!draftsEnabled || !isHydrated || confirmed || (pendingDraft && !draftHandled)) return;
+    try {
+      if (selected.length === 0) {
+        window.localStorage.removeItem(DRAFT_STORAGE_KEY);
+        return;
+      }
+      const draft: SessionDraft = {
+        sessionDate,
+        location,
+        startTime,
+        endTime,
+        selected,
+        entries,
+        rebuys,
+        rebuyCounter,
+      };
+      window.localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
+    } catch {
+      // localStorage unavailable (private mode, quota, etc.) — ignore
+    }
+  }, [
+    draftsEnabled,
+    isHydrated,
+    confirmed,
+    pendingDraft,
+    draftHandled,
+    sessionDate,
+    location,
+    startTime,
+    endTime,
+    selected,
+    entries,
+    rebuys,
+    rebuyCounter,
+  ]);
+
+  function clearDraftAndReset() {
+    try {
+      window.localStorage.removeItem(DRAFT_STORAGE_KEY);
+    } catch {
+      // ignore
+    }
+    setSessionDate(todayISO());
+    setLocation("");
+    setStartTime("");
+    setEndTime("");
+    setSelected([]);
+    setEntries({});
+    setRebuys([]);
+    setRebuyCounter(1);
+    setFormBuyer(null);
+    setSellerAmounts({});
+    setSubmitError(null);
+    setDraftHandled(true);
+  }
+
+  function resumeDraft(draft: SessionDraft) {
+    setSessionDate(draft.sessionDate);
+    setLocation(draft.location);
+    setStartTime(draft.startTime);
+    setEndTime(draft.endTime);
+    setSelected(draft.selected);
+    setEntries(draft.entries);
+    setRebuys(draft.rebuys);
+    setRebuyCounter(draft.rebuyCounter);
+    setDraftHandled(true);
+  }
 
   function entryOf(id: string): EntryState {
     return entries[id] ?? { initial: 10000, cashOut: null };
@@ -115,7 +331,7 @@ export function SessionRecorder({
 
   const entryList: EntryInput[] = selected.map((id) => ({
     userId: id,
-    initialStake: entryOf(id).initial,
+    initialStake: entryOf(id).initial ?? 0,
     cashOut: entryOf(id).cashOut,
   }));
 
@@ -172,6 +388,11 @@ export function SessionRecorder({
       router.push(`/sessions/${edit.id}`);
       router.refresh();
       return;
+    }
+    try {
+      window.localStorage.removeItem(DRAFT_STORAGE_KEY);
+    } catch {
+      // ignore
     }
     setResult(result.data);
   }
@@ -322,7 +543,40 @@ export function SessionRecorder({
             }}
           />
         </div>
+        {draftsEnabled && selected.length > 0 && (
+          <div style={{ display: "flex", justifyContent: "flex-end", padding: "0 18px 12px" }}>
+            <button
+              type="button"
+              className="ghost"
+              style={{ padding: "6px 10px", fontSize: 12 }}
+              onClick={() => setConfirmReset(true)}
+            >
+              最初からやり直す
+            </button>
+          </div>
+        )}
       </div>
+
+      {showResumeDialog && pendingDraft && (
+        <div className="modal-backdrop">
+          <div className="modal-card" role="dialog" aria-modal="true" aria-labelledby="resume-dialog-title">
+            <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 8 }} id="resume-dialog-title">
+              前回の続きから再開しますか?
+            </div>
+            <p style={{ fontSize: 13, color: "var(--muted)", marginBottom: 16 }}>
+              保存されていない対局の記録が見つかりました。前回の続きから再開するか、最初から始めるか選んでください。
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <button type="button" className="primary" onClick={() => resumeDraft(pendingDraft)}>
+                前回の続きから再開する
+              </button>
+              <button type="button" className="ghost" onClick={clearDraftAndReset}>
+                最初から始める
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="block">
         <div className="field" style={{ maxWidth: 320, marginBottom: 14 }}>
@@ -400,7 +654,7 @@ export function SessionRecorder({
           {selected.map((id) => {
             const entry = entryOf(id);
             const profit = profitOf(
-              { userId: id, initialStake: entry.initial, cashOut: entry.cashOut },
+              { userId: id, initialStake: entry.initial ?? 0, cashOut: entry.cashOut },
               rebuyInputs
             );
             const net = interimRebuyNet(rebuyInputs, id);
@@ -423,7 +677,10 @@ export function SessionRecorder({
                 <div className="entry-meta">
                   総バイイン(リバイ反映後){" "}
                   {yen(
-                    totalBuyIn({ userId: id, initialStake: entry.initial, cashOut: entry.cashOut }, rebuyInputs)
+                    totalBuyIn(
+                      { userId: id, initialStake: entry.initial ?? 0, cashOut: entry.cashOut },
+                      rebuyInputs
+                    )
                   )}
                 </div>
                 <div className="entry-fields">
@@ -433,9 +690,11 @@ export function SessionRecorder({
                       type="number"
                       min={0}
                       step={1000}
-                      value={entry.initial}
+                      value={entry.initial ?? ""}
                       disabled={confirmed}
-                      onChange={(e) => setEntry(id, { initial: Number(e.target.value || 0) })}
+                      onChange={(e) =>
+                        setEntry(id, { initial: e.target.value === "" ? null : Number(e.target.value) })
+                      }
                     />
                   </div>
                   <div className="field">
@@ -616,6 +875,17 @@ export function SessionRecorder({
         busy={deleting}
         onConfirm={handleDelete}
         onCancel={() => setConfirmDelete(false)}
+      />
+
+      <ConfirmDialog
+        open={confirmReset}
+        title="入力内容をすべて削除して最初からやり直しますか?"
+        confirmLabel="最初からやり直す"
+        onConfirm={() => {
+          clearDraftAndReset();
+          setConfirmReset(false);
+        }}
+        onCancel={() => setConfirmReset(false)}
       />
     </div>
   );
